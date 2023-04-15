@@ -19,6 +19,15 @@
 #include <Servo.h>
 #include <ArduinoJson.h>
 #include <RadioLib.h>
+#include "RS-FEC.h"
+
+// FEC Setup
+// String test = "{\"long\":0.03,\"lat\":0.07,\"glong\":0.0,\"glat\":0.0,\"elev\":6534.9}";
+const int msglen = 10; const uint8_t ECC_LENGTH = 5;
+char encoded[msglen + ECC_LENGTH];
+char repaired[msglen];
+
+RS::ReedSolomon<msglen, ECC_LENGTH> rs;
 
 // change this to fit the number of steps per revolution for the motor
 const int motorStepsPerRevolution = 200;
@@ -181,8 +190,13 @@ void loop() {
   // Serial.print(F("[SX1276] Waiting for incoming transmission ... "));
 #endif
 
-  String str;
-  int state = radio.receive(str);
+  // String str;
+  // int state = radio.receive(str);
+
+  // you can also receive data as byte array
+  // uint8_t byteArr[msglen+ECC_LENGTH];
+  uint8_t encoded[msglen+ECC_LENGTH];
+  int state = radio.receive(encoded, msglen+ECC_LENGTH);
 
   // set recPacket false until it is received
   recPacket = false;
@@ -190,10 +204,22 @@ void loop() {
   if (state == RADIOLIB_ERR_NONE) {
     //set packet received true
     recPacket = true;
-    Serial.println("Raw Received: \""+str+"\"");
+    Serial.print("Raw Received: \"");
+    for (int i=0;i<msglen+ECC_LENGTH;i++) Serial.print((char)encoded[i]);
+    Serial.println("\"");
+    // str.toCharArray(encoded, msglen);
+    Serial.println(rs.Decode(encoded, repaired));
+    String result = repaired;
+    Serial.print("Result: \"");
+    for (int i=0; i<msglen+ECC_LENGTH; i++) Serial.print((char) repaired[i]);
+    Serial.println("\"");
 
-    str.trim();
-    deserializeJson(doc, str);
+
+
+    result.trim();
+    // str.trim();
+    deserializeJson(doc, result);
+    // deserializeJson(doc, str);
     groundLat = doc["glat"];
     Serial.print("\n\nLatitude:");
     Serial.println(groundLat);
@@ -205,6 +231,10 @@ void loop() {
 #ifdef DEBUG 
     // packet was successfully received
     Serial.println(F("success!"));
+
+    // print the data of the packet
+    Serial.print(F("[SX1276] Data:\t\t\t"));
+    for (int i=0;i<msglen+ECC_LENGTH;i++) Serial.print(encoded[i]);
 
     // print the RSSI (Received Signal Strength Indicator)
     // of the last received packet
